@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // Дозволяємо лише POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -16,7 +15,6 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Змінну GEMINI_API_KEY не знайдено в Environment Variables.' });
     }
 
-    // Підготовка base64 зображення та MIME-типу
     let mimeType = 'image/jpeg';
     let cleanBase64 = imageBase64;
 
@@ -27,16 +25,27 @@ export default async function handler(req, res) {
     }
 
     const promptText = lang === 'en'
-      ? `Analyze this face image for a fun entertainment profile. Return ONLY a valid JSON object without markdown or backticks:
+      ? `Analyze this face image for a fun entertainment profile. Return ONLY a valid JSON object without markdown formatting or backticks:
 {"profileType": "Type Name", "shortDescription": "Description", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`
       : `Проаналізуй це обличчя для розважального профілю. Поверни ВИКЛЮЧНО валідний JSON об'єкт без маркдауну та без символів \`\`\`json:
 {"profileType": "Назва типу", "shortDescription": "Опис", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // Формуємо URL та заголовки з урахуванням типу ключа
+    let url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+    const headers = { 'Content-Type': 'application/json' };
+
+    if (apiKey.startsWith('AQ')) {
+      // Для нових ключів Auth Keys
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      headers['x-goog-api-key'] = apiKey;
+    } else {
+      // Для звичайних ключів AIza...
+      url += `?key=${apiKey}`;
+    }
 
     const apiRes = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify({
         contents: [{
           parts: [
@@ -60,7 +69,7 @@ export default async function handler(req, res) {
     if (!apiRes.ok) {
       console.error("Gemini Error:", data);
       return res.status(apiRes.status).json({
-        error: data?.error?.message || 'Помилка при запиті до Gemini API'
+        error: data?.error?.message || 'Помилка авторизації Gemini API'
       });
     }
 
@@ -69,7 +78,6 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Отримано порожню відповідь від AI' });
     }
 
-    // Чистимо текст перед парсингом JSON
     const jsonText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(jsonText);
 
