@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // Приймаємо лише POST-запити
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -10,74 +11,58 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Завантажте фото для аналізу.' });
     }
 
+    // Отримуємо ключ OpenRouter зі змінної GEMINI_API_KEY
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'Змінну GEMINI_API_KEY не знайдено в Environment Variables.' });
+      return res.status(500).json({ error: 'Змінну GEMINI_API_KEY не налаштовано в Environment Variables на Vercel.' });
     }
 
-    let mimeType = 'image/jpeg';
-    let cleanBase64 = imageBase64;
-
-    if (imageBase64.includes(';base64,')) {
-      const parts = imageBase64.split(';base64,');
-      mimeType = parts[0].replace('data:', '');
-      cleanBase64 = parts[1];
-    }
-
+    // Текст промпту залежно від мови
     const promptText = lang === 'en'
       ? `Analyze this face image for a fun entertainment profile. Return ONLY a valid JSON object without markdown formatting or backticks:
 {"profileType": "Type Name", "shortDescription": "Description", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`
       : `Проаналізуй це обличчя для розважального профілю. Поверни ВИКЛЮЧНО валідний JSON об'єкт без маркдауну та без символів \`\`\`json:
 {"profileType": "Назва типу", "shortDescription": "Опис", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`;
 
-    // Формуємо URL та заголовки з урахуванням типу ключа
-    let url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
-    const headers = { 'Content-Type': 'application/json' };
-
-    if (apiKey.startsWith('AQ')) {
-      // Для нових ключів Auth Keys
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      headers['x-goog-api-key'] = apiKey;
-    } else {
-      // Для звичайних ключів AIza...
-      url += `?key=${apiKey}`;
-    }
-
-    const apiRes = await fetch(url, {
-      method: 'POST',
-      headers: headers,
+    // Запит до безкоштовної моделі Gemini 2.5 Flash через OpenRouter
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: promptText },
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: cleanBase64
+        "model": "google/gemini-2.5-flash:free",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              { "type": "text", "text": promptText },
+              {
+                "type": "image_url",
+                "image_url": { "url": imageBase64 }
               }
-            }
-          ]
-        }],
-        generationConfig: {
-          response_mime_type: "application/json"
-        }
+            ]
+          }
+        ]
       })
     });
 
-    const data = await apiRes.json();
+    const data = await response.json();
 
-    if (!apiRes.ok) {
-      console.error("Gemini Error:", data);
-      return res.status(apiRes.status).json({
-        error: data?.error?.message || 'Помилка авторизації Gemini API'
+    if (!response.ok) {
+      console.error("OpenRouter Error:", data);
+      return res.status(response.status).json({ 
+        error: data?.error?.message || 'Помилка запиту до OpenRouter API' 
       });
     }
 
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    let rawText = data.choices?.[0]?.message?.content;
     if (!rawText) {
       return res.status(500).json({ error: 'Отримано порожню відповідь від AI' });
     }
 
+    // Очищення відповіді від можливої маркдаун-розмітки ```json ... ```
     const jsonText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(jsonText);
 
@@ -85,6 +70,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error("Critical Server Error:", err);
-    return res.status(500).json({ error: err.message || 'Критична помилка виконання функції' });
+    return res.status(500).json({ error: err.message || 'Критична помилка сервера' });
   }
 }
