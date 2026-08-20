@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     const { imageBase64, lang } = req.body;
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
