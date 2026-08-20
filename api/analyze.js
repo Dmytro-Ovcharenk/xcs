@@ -1,68 +1,108 @@
 export default async function handler(req, res) {
+  // Дозволяємо лише POST-запити
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  try {
-    const { imageBase64, lang } = req.body;
+  const { imageBase64, lang } = req.body;
 
-    if (!imageBase64) {
-      return res.status(400).json({ error: 'Зображення відсутнє' });
-    }
+  if (!imageBase64) {
+    return res.status(400).json({ error: 'Зображення відсутнє' });
+  }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY не налаштовано у Vercel (Environment Variables)' });
-    }
+  const apiKey = process.env.OPENAI_API_KEY; // Ваш API ключ з секретів
+  if (!apiKey) {
+    return res.status(500).json({ error: 'API key не налаштовано на сервері' });
+  }
 
-    const mimeType = imageBase64.match(/^data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+  // Промпт залежно від мови
+  const promptText = lang === 'en' 
+    ? `Analyze this face image for a fun entertainment profile. Return ONLY a JSON object without markdown formatting with the following structure:
+       {"profileType": "Type Name", "shortDescription": "Description", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`
+    : `Проаналізуй це зображення обличчя для розважального профілю. Поверни ВИКЛЮЧНО JSON об'єкт без додаткового форматування чи markdown з такою структурою:
+       {"profileType": "Назва типу", "shortDescription": "Опис", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`;
 
-    const prompt = `
-      Проаналізуй обличчя на цій фотографії в гумористичному та розважальному стилі.
-      Мова відповіді: ${lang === 'en' ? 'English' : 'Ukrainian'}.
+  // Функція для затримки (пауза між спробами)
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-      Поверни ВЕЛИЧНО ТІЛЬКИ чистий JSON без будь-якої розмітки (без markdown, без \`\`\`json):
-      {
-        "profileType": "Коротка назва типажу (наприклад, 'ГОЛОВНИЙ ГЕРОЙ', 'ТАЄМНИЧИЙ МИСЛИТЕЛЬ')",
-        "shortDescription": "2-3 речення короткого влучного опису",
-        "scores": {
-          "aura": 85,
-          "confidence": 90
+  let maxRetries = 3;      // Максимум 3 спроби
+  let attempt = 0;
+  let response = null;
+  let responseData = null;
+
+  while (attempt < maxRetries) {
+    attempt++;
+    try {
+      response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini', // або gpt-4o
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: promptText },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: imageBase64
+                  }
+                }
+              ]
+            }
+          ],
+          max_tokens: 500
+        })
+      });
+
+      responseData = await response.json();
+
+      // Якщо код 429 (Too Many Requests) або 503 (Service Unavailable) / High Demand
+      if (response.status === 429 || response.status === 503 || (responseData.error && responseData.error.message && responseData.error.message.includes('demand'))) {
+        console.warn(`[AI API] Перевантаження моделі (спроба ${attempt} з ${maxRetries}). Чекаємо 2.5 сек...`);
+        if (attempt < maxRetries) {
+          await delay(2500); // Чекаємо 2.5 секунди перед повторною спробою
+          continue;
         }
       }
-    `;
 
-    // Використовуємо актуальну модель gemini-3.6-flash
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
-
-    const apiResponse = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: base64Data } }
-          ]
-        }]
-      })
-    });
-
-    const data = await apiResponse.json();
-
-    if (!apiResponse.ok) {
-      throw new Error(data.error?.message || 'Помилка Gemini API');
+      // Якщо запит успішний — виходимо з циклу
+      if (response.ok) {
+        break;
+      }
+    } catch (err) {
+      console.error(`[AI API Error] Спроба ${attempt}:`, err);
+      if (attempt < maxRetries) {
+        await delay(2000);
+      }
     }
+  }
 
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const cleanJsonText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const parsedData = JSON.parse(cleanJsonText);
+  // Обробка відповідей після виходу з циклу
+  if (!response || !response.ok || !responseData) {
+    const errorMsg = responseData?.error?.message || '';
+    if (errorMsg.includes('demand') || response?.status === 429) {
+      return res.status(503).json({
+        error: 'Модель AI зараз перевантажена великою кількістю запитів. Будь ласка, зачекайте 10 секунд і спробуйте ще раз.'
+      });
+    }
+    return res.status(500).json({ error: 'Помилка при з'єднанні з AI. Спробуйте пізніше.' });
+  }
 
-    return res.status(200).json(parsedData);
+  // Парсимо JSON результат від AI
+  try {
+    const content = responseData.choices[0].message.content.trim();
+    // Видаляємо можливі markdown-теги ```json ... ```
+    const cleanJson = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    const parsedResult = JSON.parse(cleanJson);
 
-  } catch (error) {
-    console.error("Server Error:", error);
-    return res.status(500).json({ error: error.message || "Помилка сервера" });
+    return res.status(200).json(parsedResult);
+  } catch (err) {
+    console.error('Помилка парсингу результату від AI:', err);
+    return res.status(500).json({ error: 'Не вдалося обробити відповідь від AI.' });
   }
 }
