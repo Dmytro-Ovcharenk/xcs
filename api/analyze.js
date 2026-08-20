@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // Дозволяємо лише POST-запити
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -11,93 +10,78 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Зображення відсутнє' });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    // Отримуємо ключ Google Gemini з змінних оточення
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.error("ОШИБКА: Не задано OPENAI_API_KEY в Environment Variables на Vercel");
-      return res.status(500).json({ error: 'OPENAI_API_KEY не налаштовано на сервері Vercel' });
+      return res.status(500).json({ error: 'GEMINI_API_KEY не налаштовано в Environment Variables на Vercel' });
     }
 
-    // Текст запиту залежно від мови
-    const promptText = lang === 'en' 
-      ? `Analyze this face image for a fun entertainment profile. Return ONLY a JSON object without markdown formatting with the following structure:
+    // Видаляємо префікс data:image/...;base64, якщо він є
+    const base64Data = imageBase64.includes(',') 
+      ? imageBase64.split(',')[1] 
+      : imageBase64;
+
+    // Визначаємо тип зображення (png / jpeg)
+    let mimeType = 'image/jpeg';
+    if (imageBase64.startsWith('data:image/png')) {
+      mimeType = 'image/png';
+    } else if (imageBase64.startsWith('data:image/webp')) {
+      mimeType = 'image/webp';
+    }
+
+    // Формуємо промпт
+    const promptText = lang === 'en'
+      ? `Analyze this face image for a fun entertainment profile. Return ONLY a JSON object without markdown formatting or backticks with this exact structure:
          {"profileType": "Type Name", "shortDescription": "Description", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`
-      : `Проаналізуй це зображення обличчя для розважального профілю. Поверни ВИКЛЮЧНО JSON об'єкт без додаткового форматування чи markdown з такою структурою:
+      : `Проаналізуй це зображення обличчя для розважального профілю. Поверни ВИКЛЮЧНО JSON об'єкт без розмітки markdown чи лапок ``` з такою структурою:
          {"profileType": "Назва типу", "shortDescription": "Опис", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`;
 
-    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    let maxRetries = 3;
-    let attempt = 0;
-    let response = null;
-    let responseData = null;
-
-    while (attempt < maxRetries) {
-      attempt++;
-      try {
-        response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [
+    // Запит до безкоштовної моделі Gemini 1.5 Flash
+    const response = await fetch(`[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$){apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: promptText },
               {
-                role: 'user',
-                content: [
-                  { type: 'text', text: promptText },
-                  {
-                    type: 'image_url',
-                    image_url: {
-                      url: imageBase64
-                    }
-                  }
-                ]
+                inline_data: {
+                  mime_type: mimeType,
+                  data: base64Data
+                }
               }
-            ],
-            max_tokens: 500
-          })
-        });
-
-        responseData = await response.json();
-
-        // Повторюємо спробу, якщо модель перевантажена
-        if (response.status === 429 || response.status === 503 || (responseData?.error?.message && responseData.error.message.includes('demand'))) {
-          console.warn(`[AI API] Перевантаження (спроба ${attempt} з ${maxRetries}). Очікування 2.5 сек...`);
-          if (attempt < maxRetries) {
-            await delay(2500);
-            continue;
+            ]
           }
+        ],
+        generationConfig: {
+          response_mime_type: "application/json"
         }
+      })
+    });
 
-        if (response.ok) break;
+    const responseData = await response.json();
 
-      } catch (err) {
-        console.error(`[AI API Error] Спроба ${attempt}:`, err);
-        if (attempt < maxRetries) await delay(2000);
-      }
+    if (!response.ok) {
+      console.error('Gemini API Error:', responseData);
+      return res.status(500).json({ error: responseData?.error?.message || 'Помилка Gemini API' });
     }
 
-    if (!response || !response.ok || !responseData) {
-      const errorMsg = responseData?.error?.message || '';
-      if (errorMsg.includes('demand') || response?.status === 429) {
-        return res.status(503).json({
-          error: 'Модель AI зараз перевантажена. Будь ласка, зачекайте 10 секунд і спробуйте ще раз.'
-        });
-      }
-      return res.status(500).json({ error: responseData?.error?.message || 'Помилка при з’єднанні з AI API.' });
+    let textResult = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!textResult) {
+      return res.status(500).json({ error: 'Не вдалося отримати відповідь від AI' });
     }
 
-    // Очищаємо та розбираємо відповідь від AI
-    let content = responseData.choices[0].message.content.trim();
-    content = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    
-    const parsedResult = JSON.parse(content);
+    // Очищення від можливої маркдаун розмітки
+    textResult = textResult.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+
+    const parsedResult = JSON.parse(textResult);
     return res.status(200).json(parsedResult);
 
-  } catch (globalError) {
-    console.error("Критична помилка функції:", globalError);
-    return res.status(500).json({ error: globalError.message || 'Внутрішня помилка сервера.' });
+  } catch (error) {
+    console.error('Server Error:', error);
+    return res.status(500).json({ error: error.message || 'Внутрішня помилка сервера' });
   }
 }
