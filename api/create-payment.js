@@ -1,55 +1,40 @@
-import crypto from 'crypto';
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  const { amount = "2.99" } = req.body;
+  const token = process.env.CRYPTO_BOT_TOKEN;
+
+  if (!token) {
+    return res.status(500).json({ error: 'CRYPTO_BOT_TOKEN не налаштовано у Vercel' });
   }
 
   try {
-    const merchantId = process.env.CRYPTOMUS_MERCHANT_ID;
-    const apiKey = process.env.CRYPTOMUS_PAYMENT_KEY;
-
-    if (!merchantId || !apiKey) {
-      return res.status(500).json({ error: 'Ключі Cryptomus не налаштовані у Vercel' });
-    }
-
-    // ТУТ ВКАЗУЄТЬСЯ ЦІНА
-    const amount = req.body.amount || "2.99";
-    const orderId = `order_${Date.now()}`;
-
-    const payload = {
-      amount: amount,
-      currency: "USD",
-      order_id: orderId,
-      url_return: `${req.headers.origin || 'https://facecheck.app'}?paid=true`,
-      lifetime: 3600
-    };
-
-    const jsonPayload = JSON.stringify(payload);
-    const sign = crypto
-      .createHash('md5')
-      .update(Buffer.from(jsonPayload).toString('base64') + apiKey)
-      .digest('hex');
-
-    const response = await fetch('https://api.cryptomus.com/v1/payment', {
+    const response = await fetch('https://pay.crypt.bot/api/createInvoice', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'merchant': merchantId,
-        'sign': sign
+        'Crypto-Pay-API-Token': token
       },
-      body: jsonPayload
+      body: JSON.stringify({
+        asset: 'USDT',
+        amount: amount,
+        description: 'Розблокування повного звіту FaceCheck',
+        paid_btn_name: 'callback',
+        paid_btn_url: 'https://xcs-nine.vercel.app'
+      })
     });
 
     const data = await response.json();
 
-    if (data.state === 0 && data.result?.url) {
-      return res.status(200).json({ url: data.result.url });
+    if (data.ok && data.result?.pay_url) {
+      return res.status(200).json({ url: data.result.pay_url });
     } else {
-      throw new Error(data.message || 'Помилка генерації рахунку');
+      throw new Error(data.error?.name || 'Помилка генерації рахунку');
     }
   } catch (error) {
-    console.error("Cryptomus Error:", error);
+    console.error("CryptoBot Error:", error);
     return res.status(500).json({ error: error.message });
   }
 }
