@@ -1,56 +1,60 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const API_KEY = process.env.GEMINI_API_KEY;
-  if (!API_KEY) {
-    return res.status(500).json({ error: 'API key is missing in Environment Variables' });
-  }
-
   try {
     const { imageBase64, lang } = req.body;
-    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
 
-    const promptText = `Проаналізуй це фото у гумористичному стилі FACECHECK. Поверни ВИКЛЮЧНО JSON без додаткового тексту чи фраз:
-    {
-      "free": {
-        "profileType": "ГОЛОВНИЙ ГЕРОЙ / БОС / ХАОТИК / МІСТЕРІЯ / ДУША КОМПАНІЇ",
-        "shortDescription": "короткий жартівливий підсумок (1 речення)",
-        "scores": { "aura": 85, "confidence": 90 }
-      },
-      "premium": {
-        "roast": "детальний гострий розбір обличчя та стилю (3-4 речення)",
-        "compatibility": "з яким типом людей найкраща сумісність",
-        "secretWarning": "таємне застереження про цю людину",
-        "styleAdvice": "порада щодо іміджу"
-      }
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'Зображення відсутнє' });
     }
-    Мова відповіді: ${lang === 'uk' ? 'Українська' : 'English'}.`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: promptText },
-            { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } }
-          ]
-        }]
-      })
-    });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'API ключ не налаштовано у Vercel Environment Variables' });
+    }
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'API Error');
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    let textResponse = data.candidates[0].content.parts[0].text;
-    textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    const parsedData = JSON.parse(textResponse);
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+
+    const prompt = `
+      Проаналізуй обличчя на цій фотографії в гумористичному та розважальному стилі.
+      Мова відповіді: ${lang === 'en' ? 'English' : 'Ukrainian'}.
+
+      Поверни ВЕЛИЧНО ТІЛЬКИ чистий JSON без будь-якої розмітки (без markdown, без \`\`\`json):
+      {
+        "profileType": "Коротка назва типажу (наприклад, 'ГОЛОВНИЙ ГЕРОЙ', 'ТАЄМНИЧИЙ МИСЛИТЕЛЬ')",
+        "shortDescription": "2-3 речення короткого влучного опису",
+        "scores": {
+          "aura": число від 50 до 100,
+          "confidence": число від 50 до 100
+        }
+      }
+    `;
+
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType: "image/jpeg"
+        }
+      }
+    ]);
+
+    const responseText = await result.response.text();
+    const cleanJsonText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsedData = JSON.parse(cleanJsonText);
+
     return res.status(200).json(parsedData);
 
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error("Помилка сервера:", error);
+    return res.status(500).json({ error: "Помилка аналізу: " + error.message });
   }
 }
