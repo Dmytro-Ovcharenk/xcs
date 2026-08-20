@@ -33,7 +33,8 @@ export default async function handler(req, res) {
       }
     `;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    // Використовуємо актуальну модель gemini-3.6-flash
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
 
     const apiResponse = await fetch(url, {
       method: 'POST',
