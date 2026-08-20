@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'Змінну GEMINI_API_KEY не знайдено.' });
+      return res.status(500).json({ error: 'Змінну GEMINI_API_KEY не знайдено в Environment Variables.' });
     }
 
     const promptText = lang === 'en'
@@ -21,48 +21,61 @@ export default async function handler(req, res) {
       : `Проаналізуй це обличчя для розважального профілю. Поверни ВИКЛЮЧНО валідний JSON об'єкт без маркдауну та без символів \`\`\`json:
 {"profileType": "Назва типу", "shortDescription": "Опис", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        "model": "google/gemini-2.0-flash-lite-preview-02-05:free",
-        "messages": [
-          {
-            "role": "user",
-            "content": [
-              { "type": "text", "text": promptText },
+    // Актуальний список безкоштовних моделей OpenRouter із підтримкою аналізу фото
+    const freeModels = [
+      "google/gemini-2.0-flash-exp:free",
+      "google/gemini-exp-1206:free",
+      "qwen/qwen-2-vl-7b-instruct:free",
+      "meta-llama/llama-3.2-90b-vision-instruct:free"
+    ];
+
+    let lastError = null;
+
+    // Автоматичний перебір моделей у разі помилки
+    for (const model of freeModels) {
+      try {
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            "model": model,
+            "messages": [
               {
-                "type": "image_url",
-                "image_url": { "url": imageBase64 }
+                "role": "user",
+                "content": [
+                  { "type": "text", "text": promptText },
+                  {
+                    "type": "image_url",
+                    "image_url": { "url": imageBase64 }
+                  }
+                ]
               }
             ]
-          }
-        ]
-      })
-    });
+          })
+        });
 
-    const data = await response.json();
+        const data = await response.json();
 
-    if (!response.ok) {
-      console.error("OpenRouter Error:", data);
-      return res.status(response.status).json({ error: data?.error?.message || 'Помилка API' });
+        if (response.ok && data.choices?.[0]?.message?.content) {
+          let rawText = data.choices[0].message.content;
+          const jsonText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(jsonText);
+          return res.status(200).json(parsed);
+        } else {
+          lastError = data?.error?.message || `Модель ${model} недоступна`;
+        }
+      } catch (e) {
+        lastError = e.message;
+      }
     }
 
-    let rawText = data.choices?.[0]?.message?.content;
-    if (!rawText) {
-      return res.status(500).json({ error: 'Отримано порожню відповідь від AI' });
-    }
-
-    const jsonText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(jsonText);
-
-    return res.status(200).json(parsed);
+    return res.status(500).json({ error: `Не вдалося отримати відповідь від AI: ${lastError}` });
 
   } catch (err) {
-    console.error("Server Error:", err);
+    console.error("Critical Server Error:", err);
     return res.status(500).json({ error: err.message || 'Критична помилка сервера' });
   }
 }
