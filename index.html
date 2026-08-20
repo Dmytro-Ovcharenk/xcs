@@ -1,133 +1,511 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FACECHECK - AI-аналіз обличчя</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FACECHECK — Аналіз обличчя</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
   <style>
-    :root {
-      --bg: #121212;
-      --card: #1e1e1e;
-      --accent: #ffffff;
-      --text: #e0e0e0;
-      --text-dim: #a0a0a0;
-    }
     body {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      margin: 0;
-      padding: 20px;
-      display: flex;
-      justify-content: center;
-    }
-    .container {
-      max-width: 500px;
-      width: 100%;
-      text-align: center;
-    }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 25px;
-    }
-    .logo {
-      font-weight: 900;
-      letter-spacing: 2px;
-      font-size: 1.2rem;
-    }
-    .card {
-      background: var(--card);
-      border-radius: 16px;
-      padding: 20px;
-      margin-bottom: 20px;
-      border: 1px solid #2a2a2a;
-    }
-    .metric {
-      display: flex;
-      justify-content: space-between;
-      margin: 15px 0 5px 0;
-      font-weight: bold;
-      font-size: 0.9rem;
-    }
-    .bar {
-      height: 8px;
-      background: #333;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .fill {
-      height: 100%;
-      background: #fff;
-    }
-    .blur-content {
-      filter: blur(5px);
-      user-select: none;
-      margin: 15px 0;
-      font-size: 0.9rem;
-      line-height: 1.5;
-    }
-    .btn-pay {
-      background: #ffffff;
-      color: #000000;
-      border: none;
-      width: 100%;
-      padding: 16px;
-      border-radius: 12px;
-      font-weight: bold;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    .btn-pay:hover {
-      opacity: 0.9;
-    }
-    .btn-pay:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    .lock-icon {
-      margin-bottom: 10px;
-      font-size: 24px;
+      background-color: #F5F4F0;
+      color: #111111;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
   </style>
 </head>
-<body>
+<body class="min-h-screen flex flex-col justify-between border-box">
 
-  <div class="container">
-    <header>
-      <div class="logo">FACECHECK</div>
-      <button style="background:none; border:1px solid #444; color:#fff; padding:6px 12px; border-radius:6px; font-size:0.8rem;">PRO</button>
-    </header>
-
-    <div class="card">
-      <div class="metric"><span>АУРА</span><span>89/100</span></div>
-      <div class="bar"><div class="fill" style="width: 89%;"></div></div>
-
-      <div class="metric"><span>ВПЕВНЕНІСТЬ</span><span>94/100</span></div>
-      <div class="bar"><div class="fill" style="width: 94%;"></div></div>
+  <!-- HEADER -->
+  <header class="sticky top-0 z-40 bg-[#F5F4F0]/80 backdrop-blur-md border-b border-[#DCD9D2]">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="font-extrabold text-xl tracking-tight text-[#111111]">FACECHECK</div>
+      <nav class="flex items-center gap-6 text-sm text-[#77746E]">
+        <button onclick="togglePrivacyModal(true)" class="hover:text-[#111111] transition-colors hidden sm:inline" id="txt-privacy-nav">
+          Конфіденційність
+        </button>
+        <select id="lang-select" onchange="changeLanguage(this.value)" class="bg-transparent border border-[#DCD9D2] rounded px-2 py-1 text-xs text-[#111111] focus:outline-none cursor-pointer">
+          <option value="uk">UA</option>
+          <option value="en">EN</option>
+        </select>
+        <button onclick="scrollToUpload()" class="bg-[#111111] text-[#F5F4F0] px-4 py-2 text-xs font-semibold rounded hover:opacity-90 transition-opacity" id="txt-scan-nav">
+          ПРОСКАНУВАТИ
+        </button>
+      </nav>
     </div>
+  </header>
 
-    <div class="card">
-      <div class="lock-icon">🔒</div>
-      <h3 style="margin: 0 0 10px 0;">ГЛИБОКИЙ AI-АНАЛІЗ ОБЛИЧЧЯ</h3>
-      
-      <div class="blur-content">
-        Ваш психотип показує високу схильність до лідерства. На основі симетрії та пропорцій виявлено приховану рису, яка впливає на ваші рішення в критичних ситуаціях...
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1">
+    
+    <!-- HERO SECTION -->
+    <section id="hero-section" class="pt-20 pb-16 px-6 max-w-5xl mx-auto text-center border-b border-[#DCD9D2]">
+      <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold text-[#111111] tracking-tight leading-[1.08] mb-6" id="txt-hero-title">
+        ЩО ТВОЄ ОБЛИЧЧЯ <br /> МОЖЕ СКАЗАТИ <br /> ПРО ТЕБЕ?
+      </h1>
+      <p class="text-lg sm:text-xl text-[#77746E] max-w-2xl mx-auto font-normal mb-10" id="txt-hero-desc">
+        Завантаж фото. Ми перетворимо його на веселий персональний профіль.
+      </p>
+      <div class="flex flex-col items-center gap-3">
+        <button onclick="scrollToUpload()" class="bg-[#111111] text-[#F5F4F0] px-8 py-4 text-sm font-semibold rounded hover:bg-[#333333] transition-all transform hover:-translate-y-0.5" id="txt-hero-btn">
+          ПРОСКАНУВАТИ МОЄ ОБЛИЧЧЯ →
+        </button>
+        <span class="text-xs text-[#77746E]" id="txt-hero-sub">Без реєстрації · кілька секунд · розважальний формат</span>
+      </div>
+    </section>
+
+    <!-- UPLOAD SECTION -->
+    <section id="upload-section" class="py-20 px-6 max-w-3xl mx-auto text-center border-b border-[#DCD9D2]">
+      <h2 class="text-3xl font-extrabold text-[#111111] mb-2 uppercase tracking-tight" id="txt-upload-title">ПОКАЖИ СЕБЕ.</h2>
+      <p class="text-[#77746E] mb-8 font-normal" id="txt-upload-desc">Зроби selfie або завантаж готове фото.</p>
+
+      <!-- Error Box -->
+      <div id="error-box" class="hidden mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded"></div>
+
+      <!-- Dropzone -->
+      <div id="dropzone" class="border-2 border-dashed border-[#DCD9D2] bg-white rounded-lg p-10 flex flex-col items-center justify-center gap-6 hover:border-[#111111] transition-colors cursor-pointer">
+        <input type="file" id="file-input" accept="image/png, image/jpeg, image/webp" class="hidden" onchange="handleFileSelect(event)" />
+        <div class="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+          <button onclick="startCamera()" class="flex-1 flex items-center justify-center gap-2 bg-[#111111] text-[#F5F4F0] py-3 px-4 rounded text-xs font-semibold hover:bg-[#333333]">
+            <i data-lucide="camera" class="w-4 h-4"></i> <span id="txt-btn-selfie">ЗРОБИТИ SELFIE</span>
+          </button>
+          <button onclick="document.getElementById('file-input').click()" class="flex-1 flex items-center justify-center gap-2 bg-white text-[#111111] border border-[#111111] py-3 px-4 rounded text-xs font-semibold hover:bg-[#F5F4F0]">
+            <i data-lucide="upload" class="w-4 h-4"></i> <span id="txt-btn-upload">ЗАВАНТАЖИТИ ФОТО</span>
+          </button>
+        </div>
+        <span class="text-xs text-[#77746E]" id="txt-drag-drop">або перетягни файл сюди (PNG, JPG, WEBP)</span>
       </div>
 
-      <button id="payBtn" class="btn-pay" onclick="handlePayment()">
-        РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — $1.00 →
+      <!-- Camera Preview -->
+      <div id="camera-box" class="hidden bg-white p-4 border border-[#DCD9D2] rounded-lg flex-col items-center">
+        <video id="webcam" autoplay playsinline class="w-full max-w-md rounded mb-4 bg-black h-64 object-cover"></video>
+        <button onclick="capturePhoto()" class="bg-[#111111] text-[#F5F4F0] px-6 py-3 rounded text-xs font-semibold">
+          ЗРОБИТИ ЗНІМОК
+        </button>
+      </div>
+
+      <!-- Preview Selected Image -->
+      <div id="preview-box" class="hidden bg-white border border-[#DCD9D2] rounded-lg p-6 flex-col md:flex-row gap-6 items-center">
+        <div class="w-32 h-32 rounded bg-[#F5F4F0] overflow-hidden flex-shrink-0 border border-[#DCD9D2]">
+          <img id="img-preview" src="" alt="Preview" class="w-full h-full object-cover" />
+        </div>
+        <div class="flex-1 text-left">
+          <div class="text-xs font-bold text-[#77746E] uppercase mb-1" id="txt-photo-ready">ФОТО ГОТОВЕ</div>
+          <div id="file-name" class="text-sm font-semibold text-[#111111] truncate mb-4">photo.jpg</div>
+          <div class="flex gap-3">
+            <button onclick="runAnalysis()" class="flex items-center gap-2 bg-[#111111] text-[#F5F4F0] px-5 py-2.5 rounded text-xs font-semibold hover:opacity-90">
+              <span id="txt-btn-scan">ПРОСКАНУВАТИ</span> <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+            <button onclick="resetImage()" class="flex items-center gap-2 bg-transparent text-[#77746E] hover:text-[#111111] border border-[#DCD9D2] px-4 py-2.5 rounded text-xs font-semibold">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i> <span id="txt-btn-replace">ЗАМІНИТИ</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOADING SECTION -->
+    <section id="loading-section" class="hidden py-28 px-6 max-w-md mx-auto text-center">
+      <h2 class="text-2xl font-extrabold tracking-tight text-[#111111] mb-8" id="txt-analyzing">АНАЛІЗУЄМО...</h2>
+      <div id="loading-steps" class="flex flex-col gap-4 text-left border-l border-[#DCD9D2] pl-6 ml-4"></div>
+    </section>
+
+    <!-- RESULT SECTION -->
+    <section id="result-section" class="hidden py-16 px-6 max-w-2xl mx-auto text-center">
+      <div class="text-xs font-bold text-[#77746E] tracking-widest uppercase mb-2" id="txt-your-result">ТВІЙ РЕЗУЛЬТАТ</div>
+      <h2 id="res-profile-type" class="text-4xl sm:text-6xl font-black text-[#111111] tracking-tight mb-4">ГОЛОВНИЙ ГЕРОЙ</h2>
+      <p id="res-description" class="text-base sm:text-lg text-[#111111] font-medium leading-relaxed mb-8 bg-white p-6 border border-[#DCD9D2] rounded-lg">
+        "Опис профілю"
+      </p>
+
+      <!-- FREE SCORES -->
+      <div id="res-scores" class="bg-white border border-[#DCD9D2] rounded-lg p-6 mb-8 text-left space-y-4"></div>
+
+      <!-- PAID PREMIUM SECTION (BLURRED) -->
+      <div class="relative bg-white border border-[#DCD9D2] rounded-lg p-6 mb-8 text-left overflow-hidden">
+        <!-- Locked overlay -->
+        <div class="absolute inset-0 bg-white/80 backdrop-blur-md z-10 flex flex-col items-center justify-center p-6 text-center">
+          <div class="bg-[#111111] text-[#F5F4F0] p-3 rounded-full mb-3">
+            <i data-lucide="lock" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-xl font-black text-[#111111] mb-2 uppercase">Глибокий AI-аналіз обличчя</h3>
+          <p class="text-xs text-[#77746E] max-w-sm mb-6">
+            Розблокуйте персональний AI-Roast, сильні риси харизми, психотип за пропорціями та секретну підказку.
+          </p>
+          <button id="pay-btn" onclick="payForUnlock()" class="bg-[#111111] text-[#F5F4F0] px-8 py-4 rounded text-xs font-bold hover:bg-[#333333] transition-all transform hover:-translate-y-0.5 shadow-lg flex items-center gap-2">
+            <span id="pay-btn-text">РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — $1.00</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Blurred preview content under overlay -->
+        <div class="select-none filter blur-sm">
+          <div class="text-xs font-bold text-[#77746E] uppercase mb-2">AI ПРО ТЕБЕ (ROAST):</div>
+          <p class="text-sm text-[#111111] leading-relaxed mb-6 font-medium">
+            Ваше обличчя випромінює вайб людини, яка купує каву за $5, але забуває парасолю у дощ. Виглядає так, ніби ви готові захватити світ, або просто дуже хочете спати.
+          </p>
+          <div class="border-t border-[#DCD9D2] pt-4">
+            <div class="text-xs font-bold text-[#77746E] uppercase mb-2">СИЛЬНІ СТОРОНИ:</div>
+            <p class="text-xs text-[#111111]">1. Високий рівень візуальної довіри<br/>2. Виражена симетрія погляду</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-4 mb-16">
+        <button onclick="toggleShareModal(true)" class="flex-1 flex items-center justify-center gap-2 bg-[#111111] text-[#F5F4F0] py-3.5 rounded text-xs font-semibold hover:opacity-90">
+          <i data-lucide="share-2" class="w-4 h-4"></i> <span id="txt-btn-create-card">СТВОРИТИ КАРТКУ →</span>
+        </button>
+      </div>
+
+      <div class="border-t border-[#DCD9D2] pt-12 text-center">
+        <h3 class="text-xl font-bold text-[#111111] mb-1" id="txt-scan-friend">ТЕПЕР ПРОСКАНУЙ ДРУГА</h3>
+        <p class="text-xs text-[#77746E] mb-6" id="txt-scan-friend-sub">Цікаво, хто з вас більший хаотик?</p>
+        <button onclick="resetAll()" class="inline-flex items-center gap-2 bg-white text-[#111111] border border-[#111111] px-6 py-3 rounded text-xs font-semibold hover:bg-[#F5F4F0]">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i> <span id="txt-btn-scan-friend">ПРОСКАНУВАТИ ДРУГА</span>
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="py-8 px-6 text-center border-t border-[#DCD9D2] text-xs text-[#77746E]">
+    © <span id="year"></span> FACECHECK.
+  </footer>
+
+  <!-- PRIVACY MODAL -->
+  <div id="modal-privacy" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-[#DCD9D2] max-w-md w-full rounded-lg p-6 relative text-left">
+      <button onclick="togglePrivacyModal(false)" class="absolute top-4 right-4 text-[#77746E] hover:text-[#111111]">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      <h3 class="text-lg font-bold text-[#111111] mb-3" id="txt-privacy-title">ТВОЄ ФОТО — ТВОЄ ФОТО.</h3>
+      <p class="text-xs text-[#77746E] leading-relaxed mb-6" id="txt-privacy-desc">
+        Ми не просимо створювати акаунт. Ваше фото обробляється безпосередньо через AI і не зберігається на сервері.
+      </p>
+      <button onclick="togglePrivacyModal(false)" class="w-full bg-[#111111] text-[#F5F4F0] py-2.5 rounded text-xs font-semibold">
+        ЗРОЗУМІЛО
       </button>
     </div>
   </div>
 
+  <!-- SHARE CARD MODAL -->
+  <div id="modal-share" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-[#F5F4F0] border border-[#DCD9D2] max-w-md w-full rounded-lg p-6 relative">
+      <button onclick="toggleShareModal(false)" class="absolute top-4 right-4 text-[#77746E] hover:text-[#111111]">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      <div class="text-xs font-bold text-[#77746E] mb-4">PREVIEW CARD</div>
+
+      <div id="card-to-render" class="bg-white border border-[#DCD9D2] p-8 rounded-lg text-left shadow-lg flex flex-col justify-between" style="aspect-ratio: 9/16; min-height: 440px;">
+        <div>
+          <div class="font-black text-lg text-[#111111] tracking-tight mb-8">FACECHECK</div>
+          <div class="text-xs font-bold text-[#77746E] uppercase mb-1">ТВІЙ ТИП:</div>
+          <div id="card-type" class="text-3xl font-black text-[#111111] mb-6">ГОЛОВНИЙ ГЕРОЙ</div>
+          <div class="space-y-3 mb-8" id="card-stats"></div>
+        </div>
+        <div class="pt-6 border-t border-[#DCD9D2] flex justify-between items-center text-[10px] font-bold text-[#77746E]">
+          <span>А який у тебе?</span>
+          <span>FACECHECK.APP</span>
+        </div>
+      </div>
+
+      <div class="flex gap-3 mt-6">
+        <button onclick="downloadCard()" class="flex-1 flex items-center justify-center gap-2 bg-[#111111] text-[#F5F4F0] py-3 rounded text-xs font-semibold hover:opacity-90">
+          <i data-lucide="download" class="w-4 h-4"></i> ЗАВАНТАЖИТИ
+        </button>
+        <button onclick="copyShareText()" class="flex items-center justify-center gap-2 bg-white text-[#111111] border border-[#DCD9D2] px-4 py-3 rounded text-xs font-semibold hover:bg-[#F5F4F0]">
+          <i data-lucide="copy" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    async function handlePayment() {
-      const payBtn = document.getElementById('payBtn');
-      payBtn.disabled = true;
-      payBtn.innerText = 'Створення рахунку...';
+    document.getElementById('year').innerText = new Date().getFullYear();
+
+    let currentLang = 'uk';
+    let base64Image = null;
+    let cameraStream = null;
+    let analysisResult = null;
+
+    const translations = {
+      uk: {
+        heroTitle: "ЩО ТВОЄ ОБЛИЧЧЯ <br /> МОЖЕ СКАЗАТИ <br /> ПРО ТЕБЕ?",
+        heroDesc: "Завантаж фото. Ми перетворимо його на веселий персональний профіль.",
+        heroBtn: "ПРОСКАНУВАТИ МОЄ ОБЛИЧЧЯ →",
+        heroSub: "Без реєстрації · кілька секунд · розважальний формат",
+        privacy: "Конфіденційність",
+        scanNav: "ПРОСКАНУВАТИ",
+        uploadTitle: "ПОКАЖИ СЕБЕ.",
+        uploadDesc: "Зроби selfie або завантаж готове фото.",
+        btnSelfie: "ЗРОБИТИ SELFIE",
+        btnUpload: "ЗАВАНТАЖИТИ ФОТО",
+        dragDrop: "або перетягни файл сюди (PNG, JPG, WEBP)",
+        photoReady: "ФОТО ГОТОВЕ",
+        btnScan: "ПРОСКАНУВАТИ",
+        btnReplace: "ЗАМІНИТИ",
+        analyzing: "АНАЛІЗУЄМО...",
+        yourResult: "ТВІЙ РЕЗУЛЬТАТ",
+        btnCreateCard: "СТВОРИТИ КАРТКУ →",
+        scanFriend: "ТЕПЕР ПРОСКАНУЙ ДРУГА",
+        scanFriendSub: "Цікаво, хто з вас більший хаотик?",
+        btnScanFriend: "ПРОСКАНУВАТИ ДРУГА",
+        privacyTitle: "ТВОЄ ФОТО — ТВОЄ ФОТО.",
+        privacyDesc: "Ми не просимо створювати акаунт. Ваше фото обробляється безпосередньо через AI і не зберігається на сервері.",
+        steps: ["Перевіряємо фото", "Аналізуємо видимі риси", "Визначаємо візуальний стиль", "Формуємо твій профіль", "Готуємо результат"],
+        scoreLabels: { aura: "АУРА", confidence: "ВПЕВНЕНІСТЬ", style: "СТИЛЬ", mystery: "МІСТЕРІЯ", chaos: "ХАОС" }
+      },
+      en: {
+        heroTitle: "WHAT CAN YOUR <br /> FACE SAY <br /> ABOUT YOU?",
+        heroDesc: "Upload a photo. We will turn it into a fun personal profile.",
+        heroBtn: "SCAN MY FACE →",
+        heroSub: "No registration · A few seconds · Entertainment format",
+        privacy: "Privacy",
+        scanNav: "SCAN",
+        uploadTitle: "SHOW YOURSELF.",
+        uploadDesc: "Take a selfie or upload a photo.",
+        btnSelfie: "TAKE SELFIE",
+        btnUpload: "UPLOAD PHOTO",
+        dragDrop: "or drag & drop file here (PNG, JPG, WEBP)",
+        photoReady: "PHOTO READY",
+        btnScan: "SCAN",
+        btnReplace: "REPLACE",
+        analyzing: "ANALYZING...",
+        yourResult: "YOUR RESULT",
+        btnCreateCard: "CREATE CARD →",
+        scanFriend: "NOW SCAN A FRIEND",
+        scanFriendSub: "Wonder which of you is the bigger chaotic element?",
+        btnScanFriend: "SCAN A FRIEND",
+        privacyTitle: "YOUR PHOTO IS YOUR PHOTO.",
+        privacyDesc: "We don't ask you to create an account. Your photo is processed directly via AI without permanent server storage.",
+        steps: ["Checking photo", "Analyzing visible features", "Determining visual style", "Forming your profile", "Preparing result"],
+        scoreLabels: { aura: "AURA", confidence: "CONFIDENCE", style: "STYLE", mystery: "MYSTERY", chaos: "CHAOS" }
+      }
+    };
+
+    lucide.createIcons();
+
+    const dropzone = document.getElementById('dropzone');
+    dropzone.addEventListener('dragover', (e) => e.preventDefault());
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+    });
+
+    function scrollToUpload() {
+      document.getElementById('upload-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function changeLanguage(lang) {
+      currentLang = lang;
+      const t = translations[lang];
+      document.getElementById('txt-hero-title').innerHTML = t.heroTitle;
+      document.getElementById('txt-hero-desc').innerText = t.heroDesc;
+      document.getElementById('txt-hero-btn').innerText = t.heroBtn;
+      document.getElementById('txt-hero-sub').innerText = t.heroSub;
+      document.getElementById('txt-privacy-nav').innerText = t.privacy;
+      document.getElementById('txt-scan-nav').innerText = t.scanNav;
+      document.getElementById('txt-upload-title').innerText = t.uploadTitle;
+      document.getElementById('txt-upload-desc').innerText = t.uploadDesc;
+      document.getElementById('txt-btn-selfie').innerText = t.btnSelfie;
+      document.getElementById('txt-btn-upload').innerText = t.btnUpload;
+      document.getElementById('txt-drag-drop').innerText = t.dragDrop;
+      document.getElementById('txt-photo-ready').innerText = t.photoReady;
+      document.getElementById('txt-btn-scan').innerText = t.btnScan;
+      document.getElementById('txt-btn-replace').innerText = t.btnReplace;
+      document.getElementById('txt-analyzing').innerText = t.analyzing;
+      document.getElementById('txt-your-result').innerText = t.yourResult;
+      document.getElementById('txt-btn-create-card').innerText = t.btnCreateCard;
+      document.getElementById('txt-scan-friend').innerText = t.scanFriend;
+      document.getElementById('txt-scan-friend-sub').innerText = t.scanFriendSub;
+      document.getElementById('txt-btn-scan-friend').innerText = t.btnScanFriend;
+      document.getElementById('txt-privacy-title').innerText = t.privacyTitle;
+      document.getElementById('txt-privacy-desc').innerText = t.privacyDesc;
+    }
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) processFile(file);
+    }
+
+    function processFile(file) {
+      if (file.size > 10 * 1024 * 1024) {
+        showError("Файл занадто великий (макс 10MB)");
+        return;
+      }
+      hideError();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        base64Image = e.target.result;
+        document.getElementById('img-preview').src = base64Image;
+        document.getElementById('file-name').innerText = file.name;
+        document.getElementById('dropzone').classList.add('hidden');
+        document.getElementById('preview-box').classList.remove('hidden');
+        document.getElementById('preview-box').classList.add('flex');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function startCamera() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.getElementById('webcam');
+        video.srcObject = cameraStream;
+        document.getElementById('dropzone').classList.add('hidden');
+        document.getElementById('camera-box').classList.remove('hidden');
+        document.getElementById('camera-box').classList.add('flex');
+      } catch (e) {
+        showError("Не вдалося отримати доступ до камери");
+      }
+    }
+
+    function capturePhoto() {
+      const video = document.getElementById('webcam');
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+
+      base64Image = canvas.toDataURL('image/jpeg');
+
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+
+      document.getElementById('camera-box').classList.add('hidden');
+      document.getElementById('img-preview').src = base64Image;
+      document.getElementById('file-name').innerText = "selfie.jpg";
+      document.getElementById('preview-box').classList.remove('hidden');
+      document.getElementById('preview-box').classList.add('flex');
+    }
+
+    function resetImage() {
+      base64Image = null;
+      document.getElementById('preview-box').classList.add('hidden');
+      document.getElementById('preview-box').classList.remove('flex');
+      document.getElementById('dropzone').classList.remove('hidden');
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('error-box');
+      box.innerText = msg;
+      box.classList.remove('hidden');
+    }
+
+    function hideError() {
+      document.getElementById('error-box').classList.add('hidden');
+    }
+
+    async function runAnalysis() {
+      if (!base64Image) return;
+
+      hideError();
+      document.getElementById('upload-section').classList.add('hidden');
+      document.getElementById('loading-section').classList.remove('hidden');
+
+      const t = translations[currentLang];
+      const stepsContainer = document.getElementById('loading-steps');
+      stepsContainer.innerHTML = '';
+
+      t.steps.forEach((step, idx) => {
+        const item = document.createElement('div');
+        item.id = `step-${idx}`;
+        item.className = 'flex items-center gap-3 text-sm text-[#77746E]';
+        item.innerHTML = `<span>○</span> <span>${step}</span>`;
+        stepsContainer.appendChild(item);
+      });
+
+      let currentStep = 0;
+      const interval = setInterval(() => {
+        if (currentStep < t.steps.length) {
+          const el = document.getElementById(`step-${currentStep}`);
+          if (el) {
+            el.className = 'flex items-center gap-3 text-sm font-semibold text-[#111111]';
+            el.children[0].innerText = '●';
+          }
+          if (currentStep > 0) {
+            const prevEl = document.getElementById(`step-${currentStep - 1}`);
+            if (prevEl) {
+              prevEl.className = 'flex items-center gap-3 text-sm text-[#111111] line-through opacity-50';
+              prevEl.children[0].innerText = '✓';
+            }
+          }
+          currentStep++;
+        }
+      }, 700);
+
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64Image, lang: currentLang })
+        });
+
+        const textResult = await response.text();
+        clearInterval(interval);
+
+        let data;
+        try {
+          data = JSON.parse(textResult);
+        } catch (e) {
+          throw new Error(`Помилка сервера: ${textResult.slice(0, 150)}`);
+        }
+
+        if (!response.ok || data.error) throw new Error(data.error || "Помилка аналізу");
+
+        analysisResult = data;
+        renderResults(analysisResult);
+      } catch (err) {
+        clearInterval(interval);
+        document.getElementById('loading-section').classList.add('hidden');
+        document.getElementById('upload-section').classList.remove('hidden');
+        showError(err.message);
+      }
+    }
+
+    function renderResults(res) {
+      document.getElementById('loading-section').classList.add('hidden');
+      document.getElementById('result-section').classList.remove('hidden');
+
+      document.getElementById('res-profile-type').innerText = res.profileType;
+      document.getElementById('res-description').innerText = `"${res.shortDescription}"`;
+
+      const t = translations[currentLang];
+      const scoresContainer = document.getElementById('res-scores');
+      scoresContainer.innerHTML = '';
+
+      Object.entries(res.scores).forEach(([key, val]) => {
+        const label = t.scoreLabels[key] || key.toUpperCase();
+        const item = document.createElement('div');
+        item.innerHTML = `
+          <div class="flex justify-between text-xs font-bold text-[#111111] uppercase mb-1">
+            <span>${label}</span>
+            <span>${val}/100</span>
+          </div>
+          <div class="w-full bg-[#F5F4F0] h-2 rounded-full overflow-hidden border border-[#DCD9D2]/50">
+            <div class="bg-[#111111] h-full transition-all duration-1000" style="width: ${val}%"></div>
+          </div>
+        `;
+        scoresContainer.appendChild(item);
+      });
+
+      document.getElementById('card-type').innerText = res.profileType;
+      document.getElementById('card-stats').innerHTML = `
+        <div class="flex justify-between text-xs font-bold"><span>АУРА</span><span>${res.scores.aura || 80}/100</span></div>
+        <div class="flex justify-between text-xs font-bold"><span>ВПЕВНЕНІСТЬ</span><span>${res.scores.confidence || 80}/100</span></div>
+      `;
+    }
+
+    async function payForUnlock() {
+      const btn = document.getElementById('pay-btn');
+      const btnText = document.getElementById('pay-btn-text');
+      
+      btn.disabled = true;
+      btnText.innerText = 'Створення рахунку...';
 
       try {
         const response = await fetch('/api/create-payment', {
@@ -139,21 +517,52 @@
         const data = await response.json();
 
         if (data.url) {
-          // Перенаправлення на CryptoBot
-          window.location.href = data.url;
+          window.location.href = data.url; // Перенаправлення на CryptoBot
         } else {
-          alert('Помилка створення рахунку: ' + (data.error || 'Спробуйте пізніше'));
-          payBtn.disabled = false;
-          payBtn.innerText = 'РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — $1.00 →';
+          alert("Помилка оплати: " + (data.error || "Спробуйте пізніше"));
+          btn.disabled = false;
+          btnText.innerText = 'РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — $1.00';
         }
       } catch (err) {
-        console.error('Network Error:', err);
-        alert('Помилка з\'єднання. Перевірте підключення.');
-        payBtn.disabled = false;
-        payBtn.innerText = 'РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — $1.00 →';
+        alert("Помилка підключення до сервера");
+        btn.disabled = false;
+        btnText.innerText = 'РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — $1.00';
+      }
+    }
+
+    function resetAll() {
+      base64Image = null;
+      analysisResult = null;
+      document.getElementById('result-section').classList.add('hidden');
+      document.getElementById('upload-section').classList.remove('hidden');
+      resetImage();
+      scrollToUpload();
+    }
+
+    function togglePrivacyModal(open) {
+      document.getElementById('modal-privacy').classList.toggle('hidden', !open);
+    }
+
+    function toggleShareModal(open) {
+      document.getElementById('modal-share').classList.toggle('hidden', !open);
+    }
+
+    function downloadCard() {
+      const card = document.getElementById('card-to-render');
+      html2canvas(card).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `facecheck-${Date.now()}.png`;
+        link.href = canvas.toDataURL();
+        link.click();
+      });
+    }
+
+    function copyShareText() {
+      if (analysisResult) {
+        navigator.clipboard.writeText(`Мій тип у FACECHECK: ${analysisResult.profileType}!`);
+        alert("Скопійовано!");
       }
     }
   </script>
-
 </body>
 </html>
