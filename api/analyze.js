@@ -15,63 +15,59 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Змінну GEMINI_API_KEY не знайдено.' });
     }
 
+    // Чистка Base64
+    const base64Data = imageBase64.includes(',') 
+      ? imageBase64.split(',')[1] 
+      : imageBase64;
+
+    const mimeMatch = imageBase64.match(/^data:(image\/\w+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
     const promptText = lang === 'en'
-      ? `Analyze this face image for a fun entertainment profile. Return ONLY a valid JSON object without markdown formatting or backticks:
+      ? `Analyze this face image for a fun entertainment profile. Return ONLY a valid JSON object without markdown formatting:
 {"profileType": "Type Name", "shortDescription": "Description", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`
-      : `Проаналізуй це обличчя для розважального профілю. Поверни ВИКЛЮЧНО валідний JSON об'єкт без маркдауну та без символів \`\`\`json:
+      : `Проаналізуй це обличчя для розважального профілю. Поверни ВИКЛЮЧНО валідний JSON об'єкт без маркдауну:
 {"profileType": "Назва типу", "shortDescription": "Опис", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`;
 
-    const models = [
-      "google/gemini-2.0-flash-exp:free",
-      "google/gemini-exp-1206:free",
-      "meta-llama/llama-3.2-11b-vision-instruct:free",
-      "qwen/qwen-2-vl-7b-instruct:free"
+    // Перелік версій API Google Gemini для гарантії спрацювання
+    const endpoints = [
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`
     ];
 
-    let lastError = "Не вдалося з'єднатися з AI";
+    let lastError = null;
 
-    for (const model of models) {
+    for (const url of endpoints) {
       try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-            "Content-Type": "application/json"
-          },
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: model,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: promptText },
-                  { type: "image_url", image_url: { url: imageBase64 } }
-                ]
-              }
-            ]
+            contents: [{
+              parts: [
+                { text: promptText },
+                { inline_data: { mime_type: mimeType, data: base64Data } }
+              ]
+            }]
           })
         });
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          lastError = errData?.error?.message || `Помилка ${response.status}`;
-          continue;
-        }
-
         const data = await response.json();
-        const rawText = data.choices?.[0]?.message?.content;
 
-        if (rawText) {
+        if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          const rawText = data.candidates[0].content.parts[0].text;
           const jsonText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(jsonText);
           return res.status(200).json(parsed);
+        } else {
+          lastError = data?.error?.message || 'Помилка генерації';
         }
       } catch (e) {
         lastError = e.message;
       }
     }
 
-    return res.status(500).json({ error: `Сервер AI відповідає з помилкою: ${lastError}` });
+    return res.status(500).json({ error: `Помилка Gemini API: ${lastError}` });
 
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Критична помилка сервера' });
