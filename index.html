@@ -151,7 +151,7 @@
           </p>
           <div class="border-t border-[#DCD9D2] pt-4">
             <div class="text-xs font-bold text-[#77746E] uppercase mb-2">СИЛЬНІ СТОРОНИ:</div>
-            <p id="res-[#111111]" class="text-xs text-[#111111]">1. Високий рівень візуальної довіри<br/>2. Виражена симетрія погляду</p>
+            <p id="res-strengths" class="text-xs text-[#111111]">1. Високий рівень візуальної довіри<br/>2. Виражена симетрія погляду</p>
           </div>
         </div>
       </div>
@@ -235,7 +235,6 @@
 
     // Реквізити WayForPay
     const WFP_MERCHANT_ACCOUNT = "xcs_kmiea6uc3_dmytrokuczerenko_4827s_projects";
-    const WFP_SECRET_KEY = "0a398a826e9cd8d7b372b3597b87175f6f3c454e";
 
     const translations = {
       uk: {
@@ -508,35 +507,65 @@
       `;
     }
 
-    // Інтеграція WayForPay для оплат через Apple Pay / Google Pay / Картки
-    function payForUnlock() {
-      const wayforpay = new Wayforpay();
+    // Інтеграція WayForPay для оплат з серверною генерацією підпису
+    async function payForUnlock() {
+      const btn = document.getElementById('pay-btn');
+      const btnText = document.getElementById('pay-btn-text');
       
-      wayforpay.run({
-          merchantAccount: WFP_MERCHANT_ACCOUNT,
-          merchantDomainName: window.location.hostname,
-          authorizationType: "SimpleSignature",
-          merchantSignature: "",
-          orderReference: "ORDER_" + Date.now(),
-          orderDate: Math.floor(Date.now() / 1000),
-          amount: "50",
-          currency: "UAH",
-          productName: ["Глибокий AI-аналіз обличчя"],
-          productPrice: ["50"],
-          productCount: ["1"],
-          payMethod: "card;googlePay;applePay"
-        },
-        function (response) {
-          // Успішна оплата -> розблоковуємо прихований контент!
-          unlockPremiumReport();
-        },
-        function (response) {
-          alert("Оплату скасовано.");
-        },
-        function (response) {
-          console.log("Оплата в обробці...");
+      if (btn) btn.disabled = true;
+      if (btnText) btnText.innerText = 'ЗАВАНТАЖЕННЯ...';
+
+      const orderData = {
+        merchantAccount: WFP_MERCHANT_ACCOUNT,
+        orderDomainName: window.location.hostname,
+        orderReference: "ORDER_" + Date.now(),
+        orderDate: Math.floor(Date.now() / 1000),
+        amount: "50",
+        currency: "UAH",
+        productName: ["Глибокий AI-аналіз обличчя"],
+        productPrice: ["50"],
+        productCount: ["1"]
+      };
+
+      try {
+        // Отримуємо підпис з нашого серверного API Vercel
+        const response = await fetch('/api/create-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(orderData)
+        });
+
+        const data = await response.json();
+
+        if (!data.merchantSignature) {
+          throw new Error(data.error || "Не вдалося згенерувати підпис");
         }
-      );
+
+        const wayforpay = new Wayforpay();
+        wayforpay.run({
+            ...orderData,
+            merchantSignature: data.merchantSignature,
+            authorizationType: "SimpleSignature",
+            payMethod: "card;googlePay;applePay"
+          },
+          function (response) {
+            // Успішна оплата -> розблоковуємо прихований контент
+            unlockPremiumReport();
+          },
+          function (response) {
+            alert("Оплату скасовано.");
+            if (btn) btn.disabled = false;
+            if (btnText) btnText.innerText = 'РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — 50 UAH';
+          },
+          function (response) {
+            console.log("Оплата в обробці...");
+          }
+        );
+      } catch (err) {
+        alert("Помилка ініціалізації платежу: " + err.message);
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.innerText = 'РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — 50 UAH';
+      }
     }
 
     function unlockPremiumReport() {
