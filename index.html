@@ -8,7 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <!-- Скрипт віджета WayForPay для Apple Pay / Google Pay / карт -->
+  <!-- Скрипт віджета WayForPay -->
   <script src="https://secure.wayforpay.com/server/pay-widget.js"></script>
 
   <style>
@@ -507,7 +507,6 @@
       `;
     }
 
-    // Інтеграція WayForPay для оплат з серверною генерацією підпису
     async function payForUnlock() {
       const btn = document.getElementById('pay-btn');
       const btnText = document.getElementById('pay-btn-text');
@@ -515,11 +514,15 @@
       if (btn) btn.disabled = true;
       if (btnText) btnText.innerText = 'ЗАВАНТАЖЕННЯ...';
 
+      const domain = window.location.hostname;
+      const orderRef = "ORDER" + Date.now();
+      const orderTime = Math.floor(Date.now() / 1000);
+
       const orderData = {
         merchantAccount: WFP_MERCHANT_ACCOUNT,
-        orderDomainName: window.location.hostname,
-        orderReference: "ORDER_" + Date.now(),
-        orderDate: Math.floor(Date.now() / 1000),
+        merchantDomainName: domain,
+        orderReference: orderRef,
+        orderDate: orderTime,
         amount: "50",
         currency: "UAH",
         productName: ["Глибокий AI-аналіз обличчя"],
@@ -528,7 +531,6 @@
       };
 
       try {
-        // Отримуємо підпис з нашого серверного API Vercel
         const response = await fetch('/api/create-payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -543,13 +545,18 @@
 
         const wayforpay = new Wayforpay();
         wayforpay.run({
-            ...orderData,
+            merchantAccount: WFP_MERCHANT_ACCOUNT,
+            merchantDomainName: domain,
             merchantSignature: data.merchantSignature,
-            authorizationType: "SimpleSignature",
-            payMethod: "card;googlePay;applePay"
+            orderReference: orderRef,
+            orderDate: orderTime,
+            amount: "50",
+            currency: "UAH",
+            productName: ["Глибокий AI-аналіз обличчя"],
+            productPrice: ["50"],
+            productCount: ["1"]
           },
           function (response) {
-            // Успішна оплата -> розблоковуємо прихований контент
             unlockPremiumReport();
           },
           function (response) {
