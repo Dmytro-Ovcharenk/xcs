@@ -1,7 +1,6 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 export default async function handler(req, res) {
-  // Дозволяємо лише POST запити
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -9,7 +8,7 @@ export default async function handler(req, res) {
   try {
     const {
       merchantAccount,
-      orderDomainName,
+      merchantDomainName,
       orderReference,
       orderDate,
       amount,
@@ -19,38 +18,36 @@ export default async function handler(req, res) {
       productPrice
     } = req.body;
 
-    // Секретний ключ WayForPay (Secret Key)
-    const secretKey = process.env.WFP_SECRET_KEY || "0a398a826e9cd8d7b372b3597b87175f6f3c454e";
+    const secretKey = process.env.WAYFORPAY_SECRET_KEY;
+    if (!secretKey) {
+      return res.status(500).json({ error: 'WAYFORPAY_SECRET_KEY не налаштовано в оточенні' });
+    }
 
-    // Перетворюємо масиви товарів у строки через ";" згідно з документацією WayForPay
-    const pName = Array.isArray(productName) ? productName.join(';') : productName;
-    const pCount = Array.isArray(productCount) ? productCount.join(';') : productCount;
-    const pPrice = Array.isArray(productPrice) ? productPrice.join(';') : productPrice;
+    // Перетворюємо масиви товарів у рядки, розділені крапкою з комою (стандарт WayForPay)
+    const nameStr = Array.isArray(productName) ? productName.join(';') : productName;
+    const countStr = Array.isArray(productCount) ? productCount.join(';') : productCount;
+    const priceStr = Array.isArray(productPrice) ? productPrice.join(';') : productPrice;
 
-    // Сувора послідовність полів для формування HMAC-SHA256 підпису
-    const signString = [
+    // Рядок для розрахунку HMAC у суворому порядку WayForPay
+    const signatureString = [
       merchantAccount,
-      orderDomainName,
+      merchantDomainName,
       orderReference,
       orderDate,
       amount,
       currency,
-      pName,
-      pCount,
-      pPrice
+      nameStr,
+      countStr,
+      priceStr
     ].join(';');
 
-    // Генерація підпису
     const merchantSignature = crypto
-      .createHmac('sha256', secretKey)
-      .update(signString)
+      .createHmac('md5', secretKey)
+      .update(signatureString, 'utf8')
       .digest('hex');
 
-    // Повертаємо згенерований підпис клієнту
     return res.status(200).json({ merchantSignature });
-
   } catch (error) {
-    console.error("WayForPay Signature Error:", error);
-    return res.status(500).json({ error: error.message || 'Помилка генерації підпису' });
+    return res.status(500).json({ error: error.message });
   }
 }
