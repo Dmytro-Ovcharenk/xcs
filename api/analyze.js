@@ -12,64 +12,60 @@ export default async function handler(req, res) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'Змінну GEMINI_API_KEY не знайдено.' });
+      return res.status(500).json({ error: 'Змінну API ключа не знайдено у Vercel.' });
     }
-
-    // Чистка Base64
-    const base64Data = imageBase64.includes(',') 
-      ? imageBase64.split(',')[1] 
-      : imageBase64;
-
-    const mimeMatch = imageBase64.match(/^data:(image\/\w+);base64,/);
-    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
 
     const promptText = lang === 'en'
-      ? `Analyze this face image for a fun entertainment profile. Return ONLY a valid JSON object without markdown formatting:
+      ? `Analyze this face image for a fun entertainment profile. Return ONLY a valid JSON object without markdown formatting or backticks:
 {"profileType": "Type Name", "shortDescription": "Description", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`
-      : `Проаналізуй це обличчя для розважального профілю. Поверни ВИКЛЮЧНО валідний JSON об'єкт без маркдауну:
+      : `Проаналізуй це обличчя для розважального профілю. Поверни ВИКЛЮЧНО валідний JSON об'єкт без маркдауну та без символів \`\`\`json:
 {"profileType": "Назва типу", "shortDescription": "Опис", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`;
 
-    // Перелік версій API Google Gemini для гарантії спрацювання
-    const endpoints = [
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`
-    ];
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: promptText },
+              {
+                type: "image_url",
+                image_url: { url: imageBase64 }
+              }
+            ]
+          }
+        ],
+        max_tokens: 300
+      })
+    });
 
-    let lastError = null;
+    const data = await response.json();
 
-    for (const url of endpoints) {
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: promptText },
-                { inline_data: { mime_type: mimeType, data: base64Data } }
-              ]
-            }]
-          })
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-          const rawText = data.candidates[0].content.parts[0].text;
-          const jsonText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-          const parsed = JSON.parse(jsonText);
-          return res.status(200).json(parsed);
-        } else {
-          lastError = data?.error?.message || 'Помилка генерації';
-        }
-      } catch (e) {
-        lastError = e.message;
-      }
+    if (!response.ok) {
+      console.error("OpenAI Error:", data);
+      return res.status(response.status).json({ 
+        error: data?.error?.message || 'Помилка OpenAI API' 
+      });
     }
 
-    return res.status(500).json({ error: `Помилка Gemini API: ${lastError}` });
+    const rawText = data.choices?.[0]?.message?.content;
+    if (!rawText) {
+      return res.status(500).json({ error: 'Отримано порожню відповідь від AI' });
+    }
+
+    const jsonText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(jsonText);
+
+    return res.status(200).json(parsed);
 
   } catch (err) {
+    console.error("Server Error:", err);
     return res.status(500).json({ error: err.message || 'Критична помилка сервера' });
   }
 }
