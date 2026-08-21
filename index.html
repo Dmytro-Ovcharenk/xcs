@@ -8,6 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- Скрипт віджета WayForPay для Apple Pay / Google Pay / карт -->
+  <script src="https://secure.wayforpay.com/server/pay-widget.js"></script>
 
   <style>
     body {
@@ -124,10 +126,10 @@
       <!-- FREE SCORES -->
       <div id="res-scores" class="bg-white border border-[#DCD9D2] rounded-lg p-6 mb-8 text-left space-y-4"></div>
 
-      <!-- PAID PREMIUM SECTION (BLURRED) -->
+      <!-- PAID PREMIUM SECTION (BLURRED UNTIL PAID) -->
       <div class="relative bg-white border border-[#DCD9D2] rounded-lg p-6 mb-8 text-left overflow-hidden">
         <!-- Locked overlay -->
-        <div class="absolute inset-0 bg-white/80 backdrop-blur-md z-10 flex flex-col items-center justify-center p-6 text-center">
+        <div id="locked-overlay" class="absolute inset-0 bg-white/80 backdrop-blur-md z-10 flex flex-col items-center justify-center p-6 text-center">
           <div class="bg-[#111111] text-[#F5F4F0] p-3 rounded-full mb-3">
             <i data-lucide="lock" class="w-6 h-6"></i>
           </div>
@@ -136,20 +138,20 @@
             Розблокуйте персональний AI-Roast, сильні риси харизми, психотип за пропорціями та секретну підказку.
           </p>
           <button id="pay-btn" onclick="payForUnlock()" class="bg-[#111111] text-[#F5F4F0] px-8 py-4 rounded text-xs font-bold hover:bg-[#333333] transition-all transform hover:-translate-y-0.5 shadow-lg flex items-center gap-2">
-            <span id="pay-btn-text">РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — $1.00</span>
+            <span id="pay-btn-text">РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — 50 UAH</span>
             <i data-lucide="arrow-right" class="w-4 h-4"></i>
           </button>
         </div>
 
-        <!-- Blurred preview content under overlay -->
-        <div class="select-none filter blur-sm">
+        <!-- Content under overlay -->
+        <div id="premium-content" class="select-none filter blur-sm">
           <div class="text-xs font-bold text-[#77746E] uppercase mb-2">AI ПРО ТЕБЕ (ROAST):</div>
-          <p class="text-sm text-[#111111] leading-relaxed mb-6 font-medium">
-            Ваше обличчя випромінює вайб людини, яка купує каву за $5, але забуває парасолю у дощ. Виглядає так, ніби ви готові захватити світ, або просто дуже хочете спати.
+          <p id="res-roast-text" class="text-sm text-[#111111] leading-relaxed mb-6 font-medium">
+            Ваше обличчя випромінює вайб людини, яка купує каву за $5, але забуває парасолю у дощ. Виглядає так, ніби ви готові захопити світ, або просто дуже хочете спати.
           </p>
           <div class="border-t border-[#DCD9D2] pt-4">
             <div class="text-xs font-bold text-[#77746E] uppercase mb-2">СИЛЬНІ СТОРОНИ:</div>
-            <p class="text-xs text-[#111111]">1. Високий рівень візуальної довіри<br/>2. Виражена симетрія погляду</p>
+            <p id="res-[#111111]" class="text-xs text-[#111111]">1. Високий рівень візуальної довіри<br/>2. Виражена симетрія погляду</p>
           </div>
         </div>
       </div>
@@ -230,6 +232,10 @@
     let base64Image = null;
     let cameraStream = null;
     let analysisResult = null;
+
+    // Реквізити WayForPay
+    const WFP_MERCHANT_ACCOUNT = "xcs_kmiea6uc3_dmytrokuczerenko_4827s_projects";
+    const WFP_SECRET_KEY = "0a398a826e9cd8d7b372b3597b87175f6f3c454e";
 
     const translations = {
       uk: {
@@ -471,63 +477,72 @@
       document.getElementById('loading-section').classList.add('hidden');
       document.getElementById('result-section').classList.remove('hidden');
 
-      document.getElementById('res-profile-type').innerText = res.profileType;
-      document.getElementById('res-description').innerText = `"${res.shortDescription}"`;
+      document.getElementById('res-profile-type').innerText = res.profileType || "Результат";
+      document.getElementById('res-description').innerText = `"${res.shortDescription || ''}"`;
 
       const t = translations[currentLang];
       const scoresContainer = document.getElementById('res-scores');
       scoresContainer.innerHTML = '';
 
-      Object.entries(res.scores).forEach(([key, val]) => {
-        const label = t.scoreLabels[key] || key.toUpperCase();
-        const item = document.createElement('div');
-        item.innerHTML = `
-          <div class="flex justify-between text-xs font-bold text-[#111111] uppercase mb-1">
-            <span>${label}</span>
-            <span>${val}/100</span>
-          </div>
-          <div class="w-full bg-[#F5F4F0] h-2 rounded-full overflow-hidden border border-[#DCD9D2]/50">
-            <div class="bg-[#111111] h-full transition-all duration-1000" style="width: ${val}%"></div>
-          </div>
-        `;
-        scoresContainer.appendChild(item);
-      });
+      if (res.scores) {
+        Object.entries(res.scores).forEach(([key, val]) => {
+          const label = t.scoreLabels[key] || key.toUpperCase();
+          const item = document.createElement('div');
+          item.innerHTML = `
+            <div class="flex justify-between text-xs font-bold text-[#111111] uppercase mb-1">
+              <span>${label}</span>
+              <span>${val}/100</span>
+            </div>
+            <div class="w-full bg-[#F5F4F0] h-2 rounded-full overflow-hidden border border-[#DCD9D2]/50">
+              <div class="bg-[#111111] h-full transition-all duration-1000" style="width: ${val}%"></div>
+            </div>
+          `;
+          scoresContainer.appendChild(item);
+        });
+      }
 
-      document.getElementById('card-type').innerText = res.profileType;
+      document.getElementById('card-type').innerText = res.profileType || "Результат";
       document.getElementById('card-stats').innerHTML = `
-        <div class="flex justify-between text-xs font-bold"><span>АУРА</span><span>${res.scores.aura || 80}/100</span></div>
-        <div class="flex justify-between text-xs font-bold"><span>ВПЕВНЕНІСТЬ</span><span>${res.scores.confidence || 80}/100</span></div>
+        <div class="flex justify-between text-xs font-bold"><span>АУРА</span><span>${res.scores?.aura || 80}/100</span></div>
+        <div class="flex justify-between text-xs font-bold"><span>ВПЕВНЕНІСТЬ</span><span>${res.scores?.confidence || 80}/100</span></div>
       `;
     }
 
-    async function payForUnlock() {
-      const btn = document.getElementById('pay-btn');
-      const btnText = document.getElementById('pay-btn-text');
+    // Інтеграція WayForPay для оплат через Apple Pay / Google Pay / Картки
+    function payForUnlock() {
+      const wayforpay = new Wayforpay();
       
-      btn.disabled = true;
-      btnText.innerText = 'Створення рахунку...';
-
-      try {
-        const response = await fetch('/api/create-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: "1.00" })
-        });
-
-        const data = await response.json();
-
-        if (data.url) {
-          window.location.href = data.url; // Перенаправлення на CryptoBot
-        } else {
-          alert("Помилка оплати: " + (data.error || "Спробуйте пізніше"));
-          btn.disabled = false;
-          btnText.innerText = 'РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — $1.00';
+      wayforpay.run({
+          merchantAccount: WFP_MERCHANT_ACCOUNT,
+          merchantDomainName: window.location.hostname,
+          authorizationType: "SimpleSignature",
+          merchantSignature: "",
+          orderReference: "ORDER_" + Date.now(),
+          orderDate: Math.floor(Date.now() / 1000),
+          amount: "50",
+          currency: "UAH",
+          productName: ["Глибокий AI-аналіз обличчя"],
+          productPrice: ["50"],
+          productCount: ["1"],
+          payMethod: "card;googlePay;applePay"
+        },
+        function (response) {
+          // Успішна оплата -> розблоковуємо прихований контент!
+          unlockPremiumReport();
+        },
+        function (response) {
+          alert("Оплату скасовано.");
+        },
+        function (response) {
+          console.log("Оплата в обробці...");
         }
-      } catch (err) {
-        alert("Помилка підключення до сервера");
-        btn.disabled = false;
-        btnText.innerText = 'РОЗБЛОКУВАТИ ПОВНИЙ ЗВІТ — $1.00';
-      }
+      );
+    }
+
+    function unlockPremiumReport() {
+      document.getElementById('locked-overlay').classList.add('hidden');
+      const premiumContent = document.getElementById('premium-content');
+      premiumContent.classList.remove('select-none', 'filter', 'blur-sm');
     }
 
     function resetAll() {
@@ -535,6 +550,8 @@
       analysisResult = null;
       document.getElementById('result-section').classList.add('hidden');
       document.getElementById('upload-section').classList.remove('hidden');
+      document.getElementById('locked-overlay').classList.remove('hidden');
+      document.getElementById('premium-content').classList.add('select-none', 'filter', 'blur-sm');
       resetImage();
       scrollToUpload();
     }
