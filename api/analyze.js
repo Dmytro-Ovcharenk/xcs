@@ -1,71 +1,62 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { image } = req.body;
+
+  if (!image) {
+    return res.status(400).json({ error: 'Зображення відсутнє' });
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return res.status(500).json({ error: 'API key не налаштовано в Environment Variables хостингу' });
   }
 
   try {
-    const { imageBase64, lang } = req.body || {};
-
-    if (!imageBase64) {
-      return res.status(400).json({ error: 'Завантажте фото для аналізу.' });
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Змінну API ключа не знайдено у Vercel.' });
-    }
-
-    const promptText = lang === 'en'
-      ? `Analyze this face image for a fun entertainment profile. Return ONLY a valid JSON object without markdown formatting or backticks:
-{"profileType": "Type Name", "shortDescription": "Description", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`
-      : `Проаналізуй це обличчя для розважального профілю. Поверни ВИКЛЮЧНО валідний JSON об'єкт без маркдауну та без символів \`\`\`json:
-{"profileType": "Назва типу", "shortDescription": "Опис", "scores": {"aura": 85, "confidence": 90, "style": 75, "mystery": 80, "chaos": 60}}`;
-
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           {
             role: "user",
             content: [
-              { type: "text", text: promptText },
+              {
+                type: "text",
+                text: "Analyze this unique face features, expression, posture, and style. Return ONLY a valid JSON object with 5 unique integer scores from 40 to 99 for these keys: aura, confidence, style, mystery, chaos. Do NOT output markdown codeblocks (no ```json)."
+              },
               {
                 type: "image_url",
-                image_url: { url: imageBase64 }
+                image_url: { url: image }
               }
             ]
           }
         ],
-        max_tokens: 300
+        max_tokens: 100,
+        temperature: 0.7
       })
     });
 
     const data = await response.json();
 
-    if (!response.ok) {
-      console.error("OpenAI Error:", data);
-      return res.status(response.status).json({ 
-        error: data?.error?.message || 'Помилка OpenAI API' 
-      });
+    if (data.error) {
+      return res.status(500).json({ error: data.error.message });
     }
 
-    const rawText = data.choices?.[0]?.message?.content;
-    if (!rawText) {
-      return res.status(500).json({ error: 'Отримано порожню відповідь від AI' });
-    }
+    let content = data.choices[0].message.content.trim();
+    content = content.replace(/```json/g, '').replace(/```/g, '').trim();
 
-    const jsonText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(jsonText);
+    const scores = JSON.parse(content);
+    return res.status(200).json(scores);
 
-    return res.status(200).json(parsed);
-
-  } catch (err) {
-    console.error("Server Error:", err);
-    return res.status(500).json({ error: err.message || 'Критична помилка сервера' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 }
